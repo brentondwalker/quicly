@@ -99,10 +99,10 @@ typedef struct st_quicly_cc_t {
              * Stash of acknowledged bytes, used during congestion avoidance.
              */
             uint32_t stash;
-            /**
-             * Number of bytes required to be acked in order to increase CWND by 1 MTU.
-             */
-            uint32_t bytes_per_mtu_increase;
+	    /**
+	     * Fixed value for cwnd
+	     */
+	    uint32_t cwnd_val;
         } fixedcwnd;
         /**
          * State information for CUBIC congestion control.
