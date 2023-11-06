@@ -92,6 +92,19 @@ typedef struct st_quicly_cc_t {
             uint32_t bytes_per_mtu_increase;
         } pico;
         /**
+         * State information for FixedCwnd.
+         */
+        struct {
+            /**
+             * Stash of acknowledged bytes, used during congestion avoidance.
+             */
+            uint32_t stash;
+            /**
+             * Number of bytes required to be acked in order to increase CWND by 1 MTU.
+             */
+            uint32_t bytes_per_mtu_increase;
+        } fixedcwnd;
+        /**
          * State information for CUBIC congestion control.
          */
         struct {
@@ -181,11 +194,11 @@ struct st_quicly_cc_type_t {
 /**
  * The type objects for each CC. These can be used for testing the type of each `quicly_cc_t`.
  */
-extern quicly_cc_type_t quicly_cc_type_reno, quicly_cc_type_cubic, quicly_cc_type_pico;
+  extern quicly_cc_type_t quicly_cc_type_reno, quicly_cc_type_cubic, quicly_cc_type_pico, quicly_cc_type_fixedcwnd;
 /**
  * The factory methods for each CC.
  */
-extern struct st_quicly_init_cc_t quicly_cc_reno_init, quicly_cc_cubic_init, quicly_cc_pico_init;
+  extern struct st_quicly_init_cc_t quicly_cc_reno_init, quicly_cc_cubic_init, quicly_cc_pico_init, quicly_cc_fixedcwnd_init;
 
 /**
  * A null-terminated list of all CC types.
