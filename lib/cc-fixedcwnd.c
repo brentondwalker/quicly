@@ -19,6 +19,8 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#include <stdio.h>
+
 #include "quicly/cc.h"
 #include "quicly.h"
 
@@ -26,6 +28,7 @@
 static void fixedcwnd_on_acked(quicly_cc_t *cc, const quicly_loss_t *loss, uint32_t bytes, uint64_t largest_acked, uint32_t inflight,
                           uint64_t next_pn, int64_t now, uint32_t max_udp_payload_size)
 {
+  printf("++++ fixedcwnd_on_acked(%jd, %d)  rtt=(%d, %d, %d)\n", next_pn, inflight, loss->rtt.minimum, loss->rtt.smoothed, loss->rtt.latest);
     assert(inflight >= bytes);
 
     /* only know how to do one thing */
@@ -38,6 +41,7 @@ void quicly_cc_fixedcwnd_on_lost(quicly_cc_t *cc, const quicly_loss_t *loss, uin
 {
   //quicly_cc__update_ecn_episodes(cc, bytes, lost_pn);
 
+  printf("---- quicly_cc_fixedcwnd_on_lost(%jd, %jd)   rtt=(%d, %d, %d)\n", lost_pn, next_pn, loss->rtt.minimum, loss->rtt.smoothed, loss->rtt.latest);
     /* only know how to do one thing */
     cc->cwnd = cc->state.fixedcwnd.cwnd_val;
     cc->cwnd_maximum = cc->state.fixedcwnd.cwnd_val;
@@ -46,11 +50,13 @@ void quicly_cc_fixedcwnd_on_lost(quicly_cc_t *cc, const quicly_loss_t *loss, uin
 
 void quicly_cc_fixedcwnd_on_persistent_congestion(quicly_cc_t *cc, const quicly_loss_t *loss, int64_t now)
 {
+  printf("??????? quicly_cc_fixedcwnd_on_persistent_congestion()\n");
     /* TODO */
 }
 
 void quicly_cc_fixedcwnd_on_sent(quicly_cc_t *cc, const quicly_loss_t *loss, uint32_t bytes, int64_t now)
 {
+  //printf("fixedcwnd_on_sent(%d)\n", bytes);
     /* Unused */
 }
 

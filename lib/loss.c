@@ -19,6 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#include <stdio.h>
 #include "quicly/loss.h"
 
 int quicly_loss_init_sentmap_iter(quicly_loss_t *loss, quicly_sentmap_iter_t *iter, int64_t now, uint32_t max_ack_delay,
@@ -27,14 +28,15 @@ int quicly_loss_init_sentmap_iter(quicly_loss_t *loss, quicly_sentmap_iter_t *it
     quicly_sentmap_init_iter(&loss->sentmap, iter);
 
     int64_t retire_before = now - quicly_loss_get_sentmap_expiration_time(loss, max_ack_delay);
-
+    printf("sentmap_expiration_time: %ld\n",quicly_loss_get_sentmap_expiration_time(loss, max_ack_delay));
+    
     /* Retire entries older than the time specified, unless the connection is alive and the number of packets in the sentmap is
      * below 32 packets. This exception (the threshold of 32) exists to be capable of recognizing excessively late-ACKs when under
      * heavy loss; in such case, 32 is more than enough, yet small enough that the memory footprint does not matter. */
     const quicly_sent_packet_t *sent;
     while ((sent = quicly_sentmap_get(iter))->sent_at <= retire_before && sent->cc_bytes_in_flight == 0) {
         int ret;
-        if (!is_closing && loss->sentmap.num_packets < 32)
+        if (!is_closing && loss->sentmap.num_packets < 3200000)
             break;
         if ((ret = quicly_sentmap_update(&loss->sentmap, iter, QUICLY_SENTMAP_EVENT_EXPIRED)) != 0)
             return ret;
@@ -48,7 +50,9 @@ int quicly_loss_detect_loss(quicly_loss_t *loss, int64_t now, uint32_t max_ack_d
     /* This function ensures that the value returned in loss_time is when the next application timer should be set for loss
      * detection. if no timer is required, loss_time is set to INT64_MAX. */
 
-    const uint32_t delay_until_lost = ((loss->rtt.latest > loss->rtt.smoothed ? loss->rtt.latest : loss->rtt.smoothed) * 9 + 7) / 8;
+    //const uint32_t delay_until_lost = ((loss->rtt.latest > loss->rtt.smoothed ? loss->rtt.latest : loss->rtt.smoothed) * 9 + 7) / 8;
+  //const uint32_t delay_until_lost = ((loss->rtt.minimum) * 9 + 7) / 8;
+  const uint32_t delay_until_lost = ((loss->rtt.minimum) * 3)/2;
     quicly_sentmap_iter_t iter;
     const quicly_sent_packet_t *sent;
     int ret;
@@ -62,10 +66,15 @@ int quicly_loss_detect_loss(quicly_loss_t *loss, int64_t now, uint32_t max_ack_d
      * windows. Once marked as lost, cc_bytes_in_flight becomes zero. */
     while ((sent = quicly_sentmap_get(&iter))->packet_number != UINT64_MAX) {
         int64_t largest_acked_signed = loss->largest_acked_packet_plus1[sent->ack_epoch] - 1;
-        if ((int64_t)sent->packet_number < largest_acked_signed &&
-            (sent->sent_at <= now - delay_until_lost ||                                                      /* time threshold */
+	if (sent->cc_bytes_in_flight != 0) {
+	  printf("checking timeouts %lu   %lu...\n", (uint64_t)sent->packet_number, largest_acked_signed);
+	  printf("remaining time: %ld   max_ack_delay: %u   bif: %d\n", sent->sent_at - now + delay_until_lost, max_ack_delay, sent->cc_bytes_in_flight);
+	}
+        //if ((int64_t)sent->packet_number < largest_acked_signed &&
+	if ((sent->sent_at <= now - delay_until_lost ||                                                      /* time threshold */
              (int64_t)sent->packet_number <= largest_acked_signed - QUICLY_LOSS_DEFAULT_PACKET_THRESHOLD)) { /* packet threshold */
             if (sent->cc_bytes_in_flight != 0) {
+	      printf("register loss...\n");
                 on_loss_detected(loss, sent,
                                  (int64_t)sent->packet_number > largest_acked_signed - QUICLY_LOSS_DEFAULT_PACKET_THRESHOLD);
                 if ((ret = quicly_sentmap_update(&loss->sentmap, &iter, QUICLY_SENTMAP_EVENT_LOST)) != 0)

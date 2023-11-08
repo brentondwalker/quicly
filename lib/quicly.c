@@ -4329,7 +4329,8 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
 {
     int restrict_sending = 0, ack_only = 0, ret;
     size_t min_packets_to_send = 0;
-
+    //printf("do_send()\n");
+    
     /* handle timeouts */
     if (conn->idle_timeout.at <= conn->stash.now) {
         QUICLY_PROBE(IDLE_TIMEOUT, conn, conn->stash.now);
@@ -4367,6 +4368,7 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
 
     s->send_window = calc_send_window(conn, min_packets_to_send * conn->egress.max_udp_payload_size,
                                       calc_amplification_limit_allowance(conn), restrict_sending);
+    //printf("do_send() :: send_window=%ld\n",s->send_window);
     if (s->send_window == 0)
         ack_only = 1;
 
@@ -4386,8 +4388,10 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
         /* acks */
         if (conn->application->one_rtt_writable && conn->egress.send_ack_at <= conn->stash.now &&
             conn->application->super.unacked_count != 0) {
-            if ((ret = send_ack(conn, &conn->application->super, s)) != 0)
-                goto Exit;
+	  //printf("do_send() :: try send_ack\n");
+	  if ((ret = send_ack(conn, &conn->application->super, s)) != 0) {
+	    goto Exit;
+	  }
         }
         /* DATAGRAM frame. Notes regarding current implementation:
          * * Not limited by CC, nor the bytes counted by CC.
@@ -4395,6 +4399,7 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
          *   This is because we do not have a way to retract the generation of a QUIC packet.
          * * Does not notify the application that the frame was dropped internally. */
         if (should_send_datagram_frame(conn)) {
+	  //printf("do_send():: should_send_datagram_frame is true!\n");
             for (size_t i = 0; i != conn->egress.datagram_frame_payloads.count; ++i) {
                 ptls_iovec_t *payload = conn->egress.datagram_frame_payloads.payloads + i;
                 size_t required_space = quicly_datagram_frame_capacity(*payload);
@@ -4411,16 +4416,20 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
             }
         }
         if (!ack_only) {
+	  //printf("do_send():: !ack_only\n");
             /* PTO or loss detection timeout, always send PING. This is the easiest thing to do in terms of timer control. */
             if (min_packets_to_send != 0) {
-                if ((ret = do_allocate_frame(conn, s, 1, ALLOCATE_FRAME_TYPE_ACK_ELICITING)) != 0)
+	      if ((ret = do_allocate_frame(conn, s, 1, ALLOCATE_FRAME_TYPE_ACK_ELICITING)) != 0) {
+		//printf("do_send():: called do_allocate_frame()\n");
                     goto Exit;
+	      }
                 *s->dst++ = QUICLY_FRAME_TYPE_PING;
                 ++conn->super.stats.num_frames_sent.ping;
                 QUICLY_PROBE(PING_SEND, conn, conn->stash.now);
             }
             /* take actions only permitted for short header packets */
             if (conn->application->one_rtt_writable) {
+	      //printf("do_send():: application->one_rtt_writable\n");
                 /* send HANDSHAKE_DONE */
                 if ((conn->egress.pending_flows & QUICLY_PENDING_FLOW_HANDSHAKE_DONE_BIT) != 0 &&
                     (ret = send_handshake_done(conn, s)) != 0)
@@ -4453,12 +4462,17 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
                     s->target.full_size = 1; /* datagrams carrying PATH_CHALLENGE / PATH_RESPONSE have to be full-sized */
                 }
                 /* send max_streams frames */
-                if ((ret = send_max_streams(conn, 1, s)) != 0)
+                if ((ret = send_max_streams(conn, 1, s)) != 0) {
+		  //printf("do_send():: send_max_streams(1)\n");
                     goto Exit;
-                if ((ret = send_max_streams(conn, 0, s)) != 0)
+		}
+                if ((ret = send_max_streams(conn, 0, s)) != 0) {
+		  //printf("do_send():: send_max_streams(0)\n");
                     goto Exit;
+		}
                 /* send connection-level flow control frames */
                 if (should_send_max_data(conn)) {
+		  //printf("do_send():: should_send_max_data(conn)\n");
                     quicly_sent_t *sent;
                     if ((ret = allocate_ack_eliciting_frame(conn, s, QUICLY_MAX_DATA_FRAME_CAPACITY, &sent, on_ack_max_data)) != 0)
                         goto Exit;
@@ -4468,6 +4482,7 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
                     ++conn->super.stats.num_frames_sent.max_data;
                     QUICLY_PROBE(MAX_DATA_SEND, conn, conn->stash.now, new_value);
                 }
+
                 if (conn->egress.data_blocked == QUICLY_SENDER_STATE_SEND && (ret = send_data_blocked(conn, s)) != 0)
                     goto Exit;
                 /* send streams_blocked frames */
@@ -4516,6 +4531,7 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
             /* once more, send stream-level control frames, as the state might have changed */
             if ((ret = send_stream_control_frames(conn, s)) != 0)
                 goto Exit;
+	    //printf("do_send():: STILL HERE!\n");		
         }
     }
 
